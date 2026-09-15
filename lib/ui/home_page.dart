@@ -194,9 +194,9 @@ class _HomePageState extends State<HomePage> {
                   labelType: NavigationRailLabelType.all,
                   leading: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    child: CircleAvatar(
-                      backgroundColor: AppTheme.primaryBlue,
-                      child: const Icon(Icons.sync_alt, color: Colors.white),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset('assets/logo.png', width: 42, height: 42),
                     ),
                   ),
                   destinations: const [

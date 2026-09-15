@@ -74,10 +74,19 @@ class SettingsView extends StatelessWidget {
 
           // 5. 关于与软件版本
           Center(
-            child: Text(
-              'LanSync v1.0.0 (Pure Flutter)\n跨平台局域网安全互传系统',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500, height: 1.5),
+            child: Column(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset('assets/logo.png', width: 64, height: 64),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'LanSync v1.0.0 (Pure Flutter)\n跨平台局域网安全互传系统',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500, height: 1.5),
+                ),
+              ],
             ),
           ),
         ],
