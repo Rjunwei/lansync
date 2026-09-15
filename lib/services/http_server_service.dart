@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
+import '../models/transfer_event.dart';
 import '../models/transfer_item.dart';
 import 'security_service.dart';
 import 'trust_store_service.dart';
@@ -66,6 +67,10 @@ class HttpServerService extends ChangeNotifier {
 
   // 授权的传输会话 Token: fileId -> sessionToken
   final Map<String, String> _authorizedTransferSessions = {};
+
+  // 全局传输生命周期事件流
+  final StreamController<TransferEvent> _eventController = StreamController<TransferEvent>.broadcast();
+  Stream<TransferEvent> get transferEvents => _eventController.stream;
 
   HttpServerService({
     required this.securityService,
@@ -284,6 +289,11 @@ class HttpServerService extends ChangeNotifier {
 
       _activeTransfers[fileId] = transferItem;
       notifyListeners();
+      _eventController.add(TransferEvent(
+        type: TransferEventType.started,
+        item: transferItem,
+        message: '正在接收来自 $senderName 的 ${transferItem.fileName}...',
+      ));
 
       var lastTime = DateTime.now();
       var lastTransferred = 0;
@@ -309,6 +319,12 @@ class HttpServerService extends ChangeNotifier {
         transferItem.status = TransferStatus.completed;
         transferItem.speedBytesPerSec = 0;
         notifyListeners();
+        _eventController.add(TransferEvent(
+          type: TransferEventType.completed,
+          item: transferItem,
+          message: '成功接收文件 ${transferItem.fileName}！',
+          localPath: filePath,
+        ));
 
         return Response.ok(jsonEncode({'status': 'success', 'savedPath': filePath}));
       } catch (e) {
@@ -316,6 +332,11 @@ class HttpServerService extends ChangeNotifier {
         transferItem.status = TransferStatus.failed;
         transferItem.error = e.toString();
         notifyListeners();
+        _eventController.add(TransferEvent(
+          type: TransferEventType.failed,
+          item: transferItem,
+          message: '接收 ${transferItem.fileName} 失败: $e',
+        ));
         return Response.internalServerError(body: 'Error writing file: $e');
       }
     });
@@ -349,6 +370,11 @@ class HttpServerService extends ChangeNotifier {
 
       _activeTransfers[transferItem.id] = transferItem;
       notifyListeners();
+      _eventController.add(TransferEvent(
+        type: TransferEventType.completed,
+        item: transferItem,
+        message: '收到来自 $senderName 的文本: ${text.length > 25 ? '${text.substring(0, 25)}...' : text}',
+      ));
 
       return Response.ok(jsonEncode({'status': 'success'}));
     });
@@ -374,9 +400,19 @@ class HttpServerService extends ChangeNotifier {
   /// 获取传输列表
   List<TransferItem> get allTransfers => _activeTransfers.values.toList().reversed.toList();
 
+  /// 清除已完成或失败的历史传输记录
+  void clearTransfers() {
+    _activeTransfers.removeWhere((_, item) =>
+        item.status == TransferStatus.completed ||
+        item.status == TransferStatus.failed ||
+        item.status == TransferStatus.canceled);
+    notifyListeners();
+  }
+
   /// 停止服务
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
+    await _eventController.close();
   }
 }

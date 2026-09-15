@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/device_info.dart';
+import '../models/transfer_event.dart';
 import '../models/transfer_item.dart';
 import '../models/trust_record.dart';
 import '../services/discovery_service.dart';
@@ -16,6 +18,12 @@ class AppState extends ChangeNotifier {
   late final DiscoveryService discoveryService;
   late final HttpServerService httpServerService;
   late final TransferClientService transferClientService;
+
+  final StreamController<TransferEvent> _transferEventController = StreamController<TransferEvent>.broadcast();
+  Stream<TransferEvent> get transferEvents => _transferEventController.stream;
+
+  StreamSubscription<TransferEvent>? _httpServerSub;
+  StreamSubscription<TransferEvent>? _clientSub;
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -33,6 +41,10 @@ class AppState extends ChangeNotifier {
     httpServerService.addListener(notifyListeners);
     trustStoreService.addListener(notifyListeners);
     transferClientService.addListener(notifyListeners);
+
+    // 转发各端生命周期事件到全局流
+    _httpServerSub = httpServerService.transferEvents.listen(_transferEventController.add);
+    _clientSub = transferClientService.transferEvents.listen(_transferEventController.add);
   }
 
   /// 全局初始化并启动服务
@@ -57,6 +69,10 @@ class AppState extends ChangeNotifier {
   List<DeviceInfo> get onlineDevices => discoveryService.onlineDevices;
   List<TrustRecord> get trustedDevices => trustStoreService.trustedDevices;
 
+  /// 在线且已授权的设备列表
+  List<DeviceInfo> get trustedOnlineDevices =>
+      onlineDevices.where((d) => isDeviceTrusted(d.id)).toList();
+
   /// 获取合并后的所有传输任务（接收 + 发送，按时间倒序）
   List<TransferItem> get allTransfers {
     final list = <TransferItem>[
@@ -66,6 +82,14 @@ class AppState extends ChangeNotifier {
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return list;
   }
+
+  /// 正在传输中的任务列表
+  List<TransferItem> get activeTransfers =>
+      allTransfers.where((t) => t.status == TransferStatus.transferring).toList();
+
+  /// 当前瞬时总传输速度 (Bytes/sec)
+  double get totalTransferSpeed =>
+      activeTransfers.fold(0.0, (sum, t) => sum + t.speedBytesPerSec);
 
   /// 检查设备是否信任
   bool isDeviceTrusted(String deviceId) => trustStoreService.isTrusted(deviceId);
@@ -97,6 +121,13 @@ class AppState extends ChangeNotifier {
     return await transferClientService.sendText(target, text);
   }
 
+  /// 清理已完成或失败的历史传输记录
+  void clearTransferHistory() {
+    httpServerService.clearTransfers();
+    transferClientService.clearTransfers();
+    notifyListeners();
+  }
+
   /// 发起配对申请
   Future<bool> pairWithDevice(DeviceInfo target, {String? token, String? pin}) async {
     final success = await transferClientService.requestPairing(target, token: token, pin: pin);
@@ -122,6 +153,10 @@ class AppState extends ChangeNotifier {
     httpServerService.removeListener(notifyListeners);
     trustStoreService.removeListener(notifyListeners);
     transferClientService.removeListener(notifyListeners);
+
+    _httpServerSub?.cancel();
+    _clientSub?.cancel();
+    _transferEventController.close();
 
     discoveryService.stop();
     httpServerService.stop();
