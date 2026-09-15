@@ -51,13 +51,17 @@ class AppState extends ChangeNotifier {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    await securityService.init();
-    await trustStoreService.init();
-    await httpServerService.start();
-    await discoveryService.start();
-
-    _isInitialized = true;
-    notifyListeners();
+    try {
+      await securityService.init();
+      await trustStoreService.init();
+      await httpServerService.start();
+      await discoveryService.start();
+    } catch (e, st) {
+      debugPrint('AppState initialize error: $e\n$st');
+    } finally {
+      _isInitialized = true;
+      notifyListeners();
+    }
   }
 
   // 快捷获取属性

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/app_state.dart';
@@ -8,7 +9,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final appState = AppState();
-  await appState.initialize();
+  // 异步初始化，无需等待网络接口和端口绑定即可瞬间完成窗口绘制
+  unawaited(appState.initialize());
 
   runApp(
     ChangeNotifierProvider.value(
