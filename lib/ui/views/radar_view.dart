@@ -497,10 +497,15 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '可拖拽文件直接投送',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                      Flexible(
+                        child: Text(
+                          '点击或拖拽投送',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                        ),
                       ),
+                      const SizedBox(width: 6),
                       if (!isTrusted)
                         FilledButton.tonal(
                           style: FilledButton.styleFrom(
@@ -511,14 +516,41 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
                           child: const Text('授权配对'),
                         )
                       else
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          ),
-                          icon: const Icon(Icons.send_rounded, size: 14),
-                          label: const Text('发送文件'),
-                          onPressed: () => _pickAndSendFile(context, dev, appState),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              ),
+                              onPressed: () => _pickAndSendFile(context, dev, appState, type: FileType.media),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.photo_library_outlined, size: 14),
+                                  SizedBox(width: 4),
+                                  Text('图片', style: TextStyle(fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              ),
+                              onPressed: () => _pickAndSendFile(context, dev, appState, type: FileType.any),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.folder_open_outlined, size: 14),
+                                  SizedBox(width: 4),
+                                  Text('文件', style: TextStyle(fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                     ],
                   ),
@@ -542,7 +574,7 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 20.0),
+        padding: const EdgeInsets.symmetric(vertical: 22.0, horizontal: 20.0),
         decoration: BoxDecoration(
           color: _isBottomDropZoneHovered
               ? (isDark ? const Color(0xFF1E3A8A) : const Color(0xFFDBEAFE))
@@ -562,19 +594,43 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
             children: [
               Icon(
                 _isBottomDropZoneHovered ? Icons.file_download : Icons.cloud_upload_outlined,
-                size: 42,
+                size: 40,
                 color: AppTheme.primaryBlue,
               ),
               const SizedBox(height: 10),
               Text(
-                _isBottomDropZoneHovered ? '松开鼠标即可投送文件' : '点击选择文件，或拖拽任意文件到此处',
+                _isBottomDropZoneHovered ? '松开鼠标即可投送文件' : '选择图片/文件，或拖拽任意文件到此处',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
               const SizedBox(height: 4),
               Text(
-                '支持任意类型文件与文件夹拖拽传输；仅在已受信任的白名单设备之间互通。',
+                '支持相册图片、视频与任意格式文件；仅在已受信任的白名单设备之间互通。',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  FilledButton.tonalIcon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    icon: const Icon(Icons.photo_library_rounded, size: 18),
+                    label: const Text('选择图片 / 视频'),
+                    onPressed: () => _handleBottomDropZoneClick(context, appState, type: FileType.media),
+                  ),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    icon: const Icon(Icons.folder_open_rounded, size: 18),
+                    label: const Text('选择任意文件'),
+                    onPressed: () => _handleBottomDropZoneClick(context, appState, type: FileType.any),
+                  ),
+                ],
               ),
             ],
           ),
@@ -584,7 +640,11 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
   }
 
   /// 点击底部投送区
-  Future<void> _handleBottomDropZoneClick(BuildContext context, AppState appState) async {
+  Future<void> _handleBottomDropZoneClick(
+    BuildContext context,
+    AppState appState, {
+    FileType? type,
+  }) async {
     final trusted = appState.trustedOnlineDevices;
     if (trusted.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -597,14 +657,113 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
       return;
     }
 
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-    if (result != null && result.files.isNotEmpty) {
-      final files = result.files
-          .where((f) => f.path != null)
-          .map((f) => File(f.path!))
-          .toList();
-      if (!context.mounted) return;
-      _dispatchFilesToDevices(context, files, appState);
+    if (type == null) {
+      _showMediaTypeSelectionSheet(context, appState);
+      return;
+    }
+
+    await _pickAndDispatchFiles(context, appState, type);
+  }
+
+  /// 弹出媒体/文件选择方式弹窗
+  void _showMediaTypeSelectionSheet(BuildContext context, AppState appState) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 8.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.send_to_mobile_rounded, color: AppTheme.primaryBlue),
+                      SizedBox(width: 8),
+                      Text(
+                        '选择投送内容类型',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentGreen.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.photo_library_rounded, color: AppTheme.accentGreen),
+                  ),
+                  title: const Text('相册图片 / 视频', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('直接打开系统相册多选照片和视频'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndDispatchFiles(context, appState, FileType.media);
+                  },
+                ),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.folder_open_rounded, color: AppTheme.primaryBlue),
+                  ),
+                  title: const Text('系统文件 / 文档', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: const Text('浏览存储、文档、压缩包与各类文件'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _pickAndDispatchFiles(context, appState, FileType.any);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 选取指定类型文件并派发
+  Future<void> _pickAndDispatchFiles(
+    BuildContext context,
+    AppState appState,
+    FileType type,
+  ) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: type,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final files = result.files
+            .where((f) => f.path != null)
+            .map((f) => File(f.path!))
+            .toList();
+        if (!context.mounted) return;
+        _dispatchFilesToDevices(context, files, appState);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppTheme.alertRed,
+            content: Text('选取失败: $e'),
+          ),
+        );
+      }
     }
   }
 
@@ -780,11 +939,21 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
                 const Divider(),
                 if (isTrusted) ...[
                   ListTile(
-                    leading: const Icon(Icons.file_upload_outlined, color: AppTheme.primaryBlue),
-                    title: const Text('选取并发送文件'),
+                    leading: const Icon(Icons.photo_library_outlined, color: AppTheme.accentGreen),
+                    title: const Text('发送相册图片 / 视频'),
+                    subtitle: const Text('直接打开相册多选图片或视频'),
                     onTap: () {
                       Navigator.pop(ctx);
-                      _pickAndSendFile(context, dev, appState);
+                      _pickAndSendFile(context, dev, appState, type: FileType.media);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.folder_open_outlined, color: AppTheme.primaryBlue),
+                    title: const Text('发送系统文件 / 文档'),
+                    subtitle: const Text('浏览内部存储、文档、压缩包与各类文件'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickAndSendFile(context, dev, appState, type: FileType.any);
                     },
                   ),
                   ListTile(
@@ -838,25 +1007,42 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
   ) async {
     await PairingInitiatorDialog.show(context, dev, appState);
   }
-  /// 选择文件并发送
+
+  /// 选择文件或图片并发送
   Future<void> _pickAndSendFile(
     BuildContext context,
     DeviceInfo dev,
-    AppState appState,
-  ) async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-    if (result != null && result.files.isNotEmpty) {
-      for (final platformFile in result.files) {
-        if (platformFile.path != null) {
-          final file = File(platformFile.path!);
-          appState.sendFileToDevice(dev, file);
+    AppState appState, {
+    FileType type = FileType.any,
+  }) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: type,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        for (final platformFile in result.files) {
+          if (platformFile.path != null) {
+            final file = File(platformFile.path!);
+            appState.sendFileToDevice(dev, file);
+          }
+        }
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text('已添加 ${result.files.length} 个文件到发送队列'),
+            ),
+          );
         }
       }
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
-            content: Text('已添加 ${result.files.length} 个文件到发送队列'),
+            backgroundColor: AppTheme.alertRed,
+            content: Text('选择失败: $e'),
           ),
         );
       }
