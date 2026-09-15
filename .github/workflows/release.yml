@@ -1,0 +1,68 @@
+name: Build & Release LanSync Multi-Platform
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LanSync-Android
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  build-linux:
+    name: Build Ubuntu Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - name: Create tarball
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czf ../../../../LanSync-Linux-x64.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LanSync-Linux
+          path: LanSync-Linux-x64.tar.gz
+
+  build-windows:
+    name: Build Windows Desktop
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Archive Windows Release
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "LanSync-Windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LanSync-Windows
+          path: LanSync-Windows-x64.zip
