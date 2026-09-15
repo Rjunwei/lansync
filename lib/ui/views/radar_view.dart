@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../models/device_info.dart';
 import '../../providers/app_state.dart';
 import '../theme.dart';
+import '../widgets/pairing_initiator_dialog.dart';
 
 class RadarView extends StatefulWidget {
   const RadarView({super.key});
@@ -829,41 +830,14 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
     );
   }
 
-  /// 触发配对申请
+  /// 触发配对申请：本机生成 6 位安全码并弹窗显示，与对端屏幕同时核对
   Future<void> _triggerPairing(
     BuildContext context,
     DeviceInfo dev,
     AppState appState,
   ) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('正在向 ${dev.name} 发起配对申请，请在对方屏幕上确认...'),
-      ),
-    );
-
-    final success = await appState.pairWithDevice(dev);
-    if (!context.mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.accentGreen,
-          content: Text('与 ${dev.name} 配对成功！已加入受信任白名单。'),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.alertRed,
-          content: Text('配对被拒绝或请求超时。'),
-        ),
-      );
-    }
+    await PairingInitiatorDialog.show(context, dev, appState);
   }
-
   /// 选择文件并发送
   Future<void> _pickAndSendFile(
     BuildContext context,

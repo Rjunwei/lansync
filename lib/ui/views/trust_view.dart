@@ -6,6 +6,7 @@ import '../../models/device_info.dart';
 import '../../models/trust_record.dart';
 import '../../providers/app_state.dart';
 import '../theme.dart';
+import '../widgets/pairing_initiator_dialog.dart';
 
 class TrustView extends StatelessWidget {
   const TrustView({super.key});
@@ -296,18 +297,13 @@ class TrustView extends StatelessWidget {
                   Navigator.pop(ctx);
                   final tempDev = DeviceInfo(
                     id: 'manual-$ip',
-                    name: name,
+                    name: name.isNotEmpty ? name : 'Device-$ip',
                     platform: DevicePlatform.unknown,
                     ip: ip,
                     port: 53317,
                     fingerprint: 'MANUAL',
                   );
-                  final ok = await appState.pairWithDevice(tempDev);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(ok ? '配对成功！' : '连接超时或对方拒绝')),
-                    );
-                  }
+                  await PairingInitiatorDialog.show(context, tempDev, appState);
                 }
               },
               child: const Text('发起配对'),
