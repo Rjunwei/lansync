@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/device_info.dart';
 import '../models/transfer_event.dart';
+import '../models/transfer_item.dart';
 import '../providers/app_state.dart';
 import '../services/http_server_service.dart';
 import 'theme.dart';
@@ -27,6 +27,9 @@ class _HomePageState extends State<HomePage> {
   bool _isWindowDragHovered = false;
 
   StreamSubscription<TransferEvent>? _eventSub;
+
+  /// 传输事件去重：防止发送端+接收端同一事件被 SnackBar 展示两次
+  final Set<String> _notifiedEventKeys = {};
 
   final List<Widget> _views = const [
     RadarView(),
@@ -60,8 +63,17 @@ class _HomePageState extends State<HomePage> {
   void _handleTransferLifecycleEvent(TransferEvent event) {
     if (!mounted) return;
 
+    // ── 去重：发送端和接收端会各自触发一次相同 fileId+type 事件，只展示一次 ──
+    final dedupeKey = '${event.item.id}_${event.type.name}';
+    if (_notifiedEventKeys.contains(dedupeKey)) return;
+    _notifiedEventKeys.add(dedupeKey);
+    // 防止 Set 无限增长：超过 200 条时清理一半旧数据
+    if (_notifiedEventKeys.length > 200) _notifiedEventKeys.clear();
+
     switch (event.type) {
       case TransferEventType.started:
+        // 仅对「主动发送」方显示开始通知；接收方已弹了文件接收确认弹窗，无需再通知
+        if (event.item.direction != TransferDirection.send) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
@@ -88,6 +100,8 @@ class _HomePageState extends State<HomePage> {
         break;
 
       case TransferEventType.completed:
+        // 清除正在等待的「传输中」提示，直接展示最终结果
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
@@ -117,6 +131,7 @@ class _HomePageState extends State<HomePage> {
         break;
 
       case TransferEventType.failed:
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
@@ -139,6 +154,7 @@ class _HomePageState extends State<HomePage> {
         break;
 
       case TransferEventType.rejected:
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             behavior: SnackBarBehavior.floating,
@@ -345,110 +361,6 @@ class _HomePageState extends State<HomePage> {
     return '${(bytesPerSec / (1024 * 1024)).toStringAsFixed(1)} MB/s';
   }
 
-  /// 全局窗口拖放处理
-  Future<void> _handleWindowFilesDrop(List<DropItem> items, AppState appState) async {
-    final files = <File>[];
-    for (final item in items) {
-      final type = FileSystemEntity.typeSync(item.path);
-      if (type == FileSystemEntityType.file) {
-        files.add(File(item.path));
-      } else if (type == FileSystemEntityType.directory) {
-        final dir = Directory(item.path);
-        try {
-          for (final entity in dir.listSync(recursive: true)) {
-            if (entity is File) files.add(entity);
-          }
-        } catch (_) {}
-      }
-    }
-    if (files.isEmpty) return;
-
-    final trusted = appState.trustedOnlineDevices;
-    if (trusted.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.warningOrange,
-          content: Text('未发现已信任的在线设备，请先在雷达中完成配对'),
-        ),
-      );
-      return;
-    }
-
-    if (trusted.length == 1) {
-      final target = trusted.first;
-      for (final f in files) {
-        appState.sendFileToDevice(target, f);
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('正在向 ${target.name} 发送 ${files.length} 个文件...'),
-        ),
-      );
-    } else {
-      _showQuickDevicePicker(context, files, trusted, appState);
-    }
-  }
-
-  void _showQuickDevicePicker(
-    BuildContext context,
-    List<File> files,
-    List<DeviceInfo> devices,
-    AppState appState,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-                  child: Text(
-                    '快速投送 (${files.length} 个文件)',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ),
-                const Divider(),
-                ...devices.map(
-                  (dev) => ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0xFFEFF6FF),
-                      child: Icon(Icons.devices, color: AppTheme.primaryBlue),
-                    ),
-                    title: Text(dev.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('IP: ${dev.ip}'),
-                    trailing: const Icon(Icons.send_rounded, color: AppTheme.primaryBlue),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      for (final f in files) {
-                        appState.sendFileToDevice(dev, f);
-                      }
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          behavior: SnackBarBehavior.floating,
-                          content: Text('正在向 ${dev.name} 发送 ${files.length} 个文件...'),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -547,14 +459,13 @@ class _HomePageState extends State<HomePage> {
           );
         }
 
-        // 全局拖拽容器与浮动传输胶囊组合
+        // 全局拖拽容器：仅用于「拖入窗口时显示全屏遮罩」视觉效果
+        // onDragDone 不在此处理：由 RadarView 内各设备卡片或底部 Drop 区各自处理，
+        // 避免全局 DropTarget 拦截设备卡片级的精准投送
         return DropTarget(
           onDragEntered: (_) => setState(() => _isWindowDragHovered = true),
           onDragExited: (_) => setState(() => _isWindowDragHovered = false),
-          onDragDone: (details) async {
-            setState(() => _isWindowDragHovered = false);
-            await _handleWindowFilesDrop(details.files, appState);
-          },
+          onDragDone: (_) => setState(() => _isWindowDragHovered = false),
           child: Stack(
             children: [
               contentWidget,

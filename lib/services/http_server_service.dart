@@ -346,6 +346,12 @@ class HttpServerService extends ChangeNotifier {
           localPath: filePath,
         ));
 
+        // 8 秒后自动移除，避免浮动传输胶囊永远显示
+        Future.delayed(const Duration(seconds: 8), () {
+          _activeTransfers.remove(fileId);
+          notifyListeners();
+        });
+
         return Response.ok(jsonEncode({'status': 'success', 'savedPath': filePath}));
       } catch (e) {
         await sink.close();
@@ -357,6 +363,12 @@ class HttpServerService extends ChangeNotifier {
           item: transferItem,
           message: '接收 ${transferItem.fileName} 失败: $e',
         ));
+
+        Future.delayed(const Duration(seconds: 8), () {
+          _activeTransfers.remove(fileId);
+          notifyListeners();
+        });
+
         return Response.internalServerError(body: 'Error writing file: $e');
       }
     });

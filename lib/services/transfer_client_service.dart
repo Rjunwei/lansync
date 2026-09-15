@@ -216,6 +216,13 @@ class TransferClientService extends ChangeNotifier {
           message: '文件 $fileName 已成功发送给 ${target.name}！',
           localPath: file.path,
         ));
+
+        // 8 秒后自动从列表移除，避免浮动传输胶囊永远显示
+        Future.delayed(const Duration(seconds: 8), () {
+          _outgoingTransfers.remove(fileId);
+          notifyListeners();
+        });
+
         return true;
       } else {
         transferItem.status = TransferStatus.failed;
@@ -227,6 +234,12 @@ class TransferClientService extends ChangeNotifier {
           item: transferItem,
           message: '向 ${target.name} 发送 $fileName 失败: HTTP ${response.statusCode}',
         ));
+
+        Future.delayed(const Duration(seconds: 8), () {
+          _outgoingTransfers.remove(fileId);
+          notifyListeners();
+        });
+
         return false;
       }
     } catch (e) {
@@ -239,6 +252,12 @@ class TransferClientService extends ChangeNotifier {
         item: transferItem,
         message: '向 ${target.name} 发送 $fileName 失败: $e',
       ));
+
+      Future.delayed(const Duration(seconds: 8), () {
+        _outgoingTransfers.remove(fileId);
+        notifyListeners();
+      });
+
       return false;
     }
   }

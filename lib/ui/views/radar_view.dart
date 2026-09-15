@@ -889,6 +889,15 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
                     },
                   ),
                 ),
+                const Divider(),
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFF1F5F9),
+                    child: Icon(Icons.close, color: Colors.grey),
+                  ),
+                  title: const Text('取消', style: TextStyle(color: Colors.grey)),
+                  onTap: () => Navigator.pop(ctx),
+                ),
               ],
             ),
           ),
