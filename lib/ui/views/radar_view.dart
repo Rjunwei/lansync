@@ -119,28 +119,8 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
               children: [
                 Row(
                   children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        AnimatedBuilder(
-                          animation: _pulseAnimation,
-                          builder: (context, child) {
-                            return Container(
-                              width: 24 + (_pulseAnimation.value * 12),
-                              height: 24 + (_pulseAnimation.value * 12),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppTheme.primaryBlue.withValues(
-                                  alpha: (1 - _pulseAnimation.value) * 0.35,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const Icon(Icons.radar, color: AppTheme.primaryBlue, size: 22),
-                      ],
-                    ),
-                    const SizedBox(width: 10),
+                    const Icon(Icons.radar, color: AppTheme.primaryBlue, size: 24),
+                    const SizedBox(width: 8),
                     Text(
                       '在线设备 (${appState.onlineDevices.length})',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -278,34 +258,38 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
       ),
       child: Column(
         children: [
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (context, child) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  Container(
-                    width: 70 + (_pulseAnimation.value * 40),
-                    height: 70 + (_pulseAnimation.value * 40),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppTheme.primaryBlue.withValues(
-                        alpha: (1 - _pulseAnimation.value) * 0.2,
+          SizedBox(
+            width: 120,
+            height: 120,
+            child: AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 60 + (_pulseAnimation.value * 50),
+                      height: 60 + (_pulseAnimation.value * 50),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.primaryBlue.withValues(
+                          alpha: (1 - _pulseAnimation.value) * 0.25,
+                        ),
                       ),
                     ),
-                  ),
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                      ),
+                      child: const Icon(Icons.wifi_tethering, size: 36, color: AppTheme.primaryBlue),
                     ),
-                    child: const Icon(Icons.wifi_tethering, size: 36, color: AppTheme.primaryBlue),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
           const SizedBox(height: 20),
           const Text(
