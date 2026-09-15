@@ -51,6 +51,22 @@ class TransferClientService extends ChangeNotifier {
     }
   }
 
+  /// 通知目标设备解除配对授权 (双向同步解绑)
+  Future<bool> notifyUnpair(DeviceInfo target) async {
+    final url = Uri.parse('http://${target.ip}:${target.port}/api/v1/unpair');
+    try {
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'deviceId': securityService.deviceId}),
+      ).timeout(const Duration(seconds: 3));
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('notifyUnpair failed: $e');
+      return false;
+    }
+  }
+
   /// 发送单文件
   Future<bool> sendFile(DeviceInfo target, File file) async {
     final fileName = p.basename(file.path);

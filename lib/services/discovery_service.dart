@@ -50,13 +50,16 @@ class DiscoveryService extends ChangeNotifier {
       // 立即广播一次
       broadcastPresence();
 
-      // 每 5 秒定时心跳广播
-      _broadcastTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      // 立即广播一次
+      broadcastPresence();
+
+      // 每 3 秒定时心跳广播
+      _broadcastTimer = Timer.periodic(const Duration(seconds: 3), (_) {
         broadcastPresence();
       });
 
-      // 每 3 秒清理超时 15 秒离线的设备
-      _cleanTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      // 每 2 秒清理超时 8 秒离线的设备
+      _cleanTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         _cleanOfflineDevices();
       });
     } catch (e) {
@@ -113,6 +116,29 @@ class DiscoveryService extends ChangeNotifier {
     }
   }
 
+  /// 发送局域网离线广播 (用于隐身模式开启或退出时的秒级通知)
+  void broadcastOffline() {
+    if (_socket == null) return;
+    final message = jsonEncode({
+      'type': 'BYE',
+      'id': securityService.deviceId,
+    });
+    final bytes = utf8.encode(message);
+
+    try {
+      _socket?.send(bytes, InternetAddress('255.255.255.255'), discoveryPort);
+      if (_localIp.contains('.')) {
+        final parts = _localIp.split('.');
+        if (parts.length == 4) {
+          final subnetBroadcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+          _socket?.send(bytes, InternetAddress(subnetBroadcast), discoveryPort);
+        }
+      }
+    } catch (e) {
+      debugPrint('Broadcast offline error: $e');
+    }
+  }
+
   /// 处理收到的 UDP 数据报
   void _handleDatagram(Datagram datagram) {
     try {
@@ -123,6 +149,15 @@ class DiscoveryService extends ChangeNotifier {
 
       // 忽略自己发送的数据包
       if (senderId == null || senderId == securityService.deviceId) {
+        return;
+      }
+
+      // 对方发送了 BYE 下线报文，立即将其从在线列表中移除
+      if (type == 'BYE') {
+        if (_discoveredDevices.containsKey(senderId)) {
+          _discoveredDevices.remove(senderId);
+          notifyListeners();
+        }
         return;
       }
 
@@ -141,14 +176,14 @@ class DiscoveryService extends ChangeNotifier {
     }
   }
 
-  /// 清理离线设备
+  /// 清理离线设备 (异常断网容灾清理)
   void _cleanOfflineDevices() {
     final now = DateTime.now();
     bool changed = false;
 
     _discoveredDevices.removeWhere((id, dev) {
       final diff = now.difference(dev.lastSeen).inSeconds;
-      if (diff > 15) {
+      if (diff > 8) {
         changed = true;
         return true;
       }
@@ -163,11 +198,17 @@ class DiscoveryService extends ChangeNotifier {
   /// 切换隐身模式
   void toggleGhostMode(bool enabled) {
     _isGhostMode = enabled;
+    if (enabled) {
+      broadcastOffline(); // 开启隐身时，立即向局域网广播离线消息
+    } else {
+      broadcastPresence(); // 恢复可见时，立即广播上线
+    }
     notifyListeners();
   }
 
   /// 停止服务
   void stop() {
+    broadcastOffline();
     _broadcastTimer?.cancel();
     _cleanTimer?.cancel();
     _socket?.close();

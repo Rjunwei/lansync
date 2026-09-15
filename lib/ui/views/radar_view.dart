@@ -7,6 +7,7 @@ import '../../models/device_info.dart';
 import '../../providers/app_state.dart';
 import '../theme.dart';
 import '../widgets/pairing_initiator_dialog.dart';
+import '../widgets/qr_scanner_view.dart';
 
 class RadarView extends StatefulWidget {
   const RadarView({super.key});
@@ -87,6 +88,12 @@ class _RadarViewState extends State<RadarView> with SingleTickerProviderStateMix
           ],
         ),
         actions: [
+          if (Platform.isAndroid || Platform.isIOS)
+            IconButton(
+              tooltip: '扫码配对',
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: () => QrScannerView.open(context, appState),
+            ),
           IconButton(
             tooltip: '重新探测局域网',
             icon: const Icon(Icons.refresh),

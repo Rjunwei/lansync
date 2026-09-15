@@ -126,7 +126,27 @@ class HttpServerService extends ChangeNotifier {
       );
     });
 
-    // 2. 发起配对请求
+    // 2. 接收对端发来的解除授权通知
+    app.post('/api/v1/unpair', (Request request) async {
+      try {
+        final payload = await request.readAsString();
+        final data = jsonDecode(payload) as Map<String, dynamic>;
+        final devId = data['deviceId'] as String?;
+        if (devId != null && devId.isNotEmpty) {
+          await trustStoreService.removeDevice(devId);
+          notifyListeners();
+          return Response.ok(
+            jsonEncode({'status': 'unpaired', 'deviceId': devId}),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+      } catch (e) {
+        debugPrint('Handle unpair error: $e');
+      }
+      return Response.badRequest(body: jsonEncode({'error': 'Invalid deviceId'}));
+    });
+
+    // 3. 发起配对请求
     app.post('/api/v1/pair/request', (Request request) async {
       final payload = await request.readAsString();
       final data = jsonDecode(payload) as Map<String, dynamic>;

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -7,6 +8,7 @@ import '../../models/trust_record.dart';
 import '../../providers/app_state.dart';
 import '../theme.dart';
 import '../widgets/pairing_initiator_dialog.dart';
+import '../widgets/qr_scanner_view.dart';
 
 class TrustView extends StatelessWidget {
   const TrustView({super.key});
@@ -20,9 +22,17 @@ class TrustView extends StatelessWidget {
       appBar: AppBar(
         title: const Text('设备信任中心', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          if (Platform.isAndroid || Platform.isIOS) ...[
+            FilledButton.tonalIcon(
+              icon: const Icon(Icons.qr_code_scanner, size: 18),
+              label: const Text('扫码配对'),
+              onPressed: () => QrScannerView.open(context, appState),
+            ),
+            const SizedBox(width: 8),
+          ],
           FilledButton.icon(
             icon: const Icon(Icons.qr_code, size: 18),
-            label: const Text('生成配对二维码'),
+            label: const Text('生成二维码'),
             onPressed: () => _showPairingQrModal(context, appState),
           ),
           const SizedBox(width: 8),
@@ -219,13 +229,25 @@ class TrustView extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: 220,
-                height: 220,
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
                 child: QrImageView(
                   data: payload,
                   version: QrVersions.auto,
-                  size: 220.0,
+                  size: 200.0,
+                  backgroundColor: Colors.white,
                 ),
               ),
               const SizedBox(height: 16),

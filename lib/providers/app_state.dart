@@ -142,9 +142,16 @@ class AppState extends ChangeNotifier {
     return success;
   }
 
-  /// 解除设备信任
+  /// 解除设备信任 (双向解绑)
   Future<void> unpairDevice(String deviceId) async {
+    // 1. 如果对端在线，发送 HTTP 解除通知
+    final onlineTarget = onlineDevices.where((d) => d.id == deviceId).firstOrNull;
+    if (onlineTarget != null) {
+      transferClientService.notifyUnpair(onlineTarget);
+    }
+    // 2. 本地移除信任
     await trustStoreService.removeDevice(deviceId);
+    notifyListeners();
   }
 
   @override
