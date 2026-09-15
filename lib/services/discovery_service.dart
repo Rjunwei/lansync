@@ -96,7 +96,17 @@ class DiscoveryService extends ChangeNotifier {
       if (targetAddress != null) {
         _socket?.send(bytes, targetAddress, discoveryPort);
       } else {
+        // 1. 全局受限广播
         _socket?.send(bytes, InternetAddress('255.255.255.255'), discoveryPort);
+
+        // 2. 本地子网定向广播 (增强多网卡或虚拟网卡环境下的穿透率)
+        if (_localIp.contains('.')) {
+          final parts = _localIp.split('.');
+          if (parts.length == 4) {
+            final subnetBroadcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+            _socket?.send(bytes, InternetAddress(subnetBroadcast), discoveryPort);
+          }
+        }
       }
     } catch (e) {
       debugPrint('Broadcast send error: $e');

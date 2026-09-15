@@ -52,6 +52,8 @@ class TransferClientService extends ChangeNotifier {
     final totalBytes = await file.length();
     final fileId = DateTime.now().millisecondsSinceEpoch.toString();
 
+    String transferToken = '';
+
     // 1. 握手检查对方是否授权接收
     final handshakeUrl = Uri.parse('http://${target.ip}:${target.port}/api/v1/transfer/handshake');
     try {
@@ -73,6 +75,9 @@ class TransferClientService extends ChangeNotifier {
         debugPrint('Handshake rejected or unauthorized: ${handshakeRes.statusCode} - ${handshakeRes.body}');
         return false;
       }
+
+      final handshakeData = jsonDecode(handshakeRes.body) as Map<String, dynamic>;
+      transferToken = handshakeData['token'] as String? ?? '';
     } catch (e) {
       debugPrint('Handshake failed: $e');
       return false;
@@ -102,6 +107,7 @@ class TransferClientService extends ChangeNotifier {
       request.headers['x-device-name'] = securityService.deviceName;
       request.headers['x-file-name'] = base64Encode(utf8.encode(fileName));
       request.headers['x-total-bytes'] = totalBytes.toString();
+      request.headers['x-transfer-token'] = transferToken;
 
       final fileStream = file.openRead();
       var lastTime = DateTime.now();

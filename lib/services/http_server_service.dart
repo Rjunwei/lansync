@@ -64,6 +64,9 @@ class HttpServerService extends ChangeNotifier {
   // 正在接收的任务
   final Map<String, TransferItem> _activeTransfers = {};
 
+  // 授权的传输会话 Token: fileId -> sessionToken
+  final Map<String, String> _authorizedTransferSessions = {};
+
   HttpServerService({
     required this.securityService,
     required this.trustStoreService,
@@ -192,9 +195,13 @@ class HttpServerService extends ChangeNotifier {
         }));
       }
 
+      // 生成单次传输会话安全 Token
+      final sessionToken = securityService.generatePairingToken();
+      _authorizedTransferSessions[fileId] = sessionToken;
+
       // 如果开启了受信任设备自动接收
       if (trustStoreService.isAutoAccept(senderId)) {
-        return Response.ok(jsonEncode({'accepted': true}));
+        return Response.ok(jsonEncode({'accepted': true, 'token': sessionToken}));
       }
 
       // 否则触发本地用户弹窗询问
@@ -203,7 +210,7 @@ class HttpServerService extends ChangeNotifier {
         fileId: fileId,
         deviceId: senderId,
         deviceName: senderName,
-        fileName: fileName,
+        fileName: p.basename(fileName),
         totalBytes: totalBytes,
         completer: completer,
       );
@@ -214,8 +221,9 @@ class HttpServerService extends ChangeNotifier {
       notifyListeners();
 
       if (accepted) {
-        return Response.ok(jsonEncode({'accepted': true}));
+        return Response.ok(jsonEncode({'accepted': true, 'token': sessionToken}));
       } else {
+        _authorizedTransferSessions.remove(fileId);
         return Response.forbidden(jsonEncode({'accepted': false}));
       }
     });
@@ -224,16 +232,27 @@ class HttpServerService extends ChangeNotifier {
     app.post('/api/v1/transfer/upload', (Request request) async {
       final senderId = request.headers['x-device-id'] ?? '';
       final senderName = request.headers['x-device-name'] ?? 'Device';
-      final fileName = request.headers['x-file-name'] != null
+      final rawFileName = request.headers['x-file-name'] != null
           ? utf8.decode(base64Decode(request.headers['x-file-name']!))
           : 'received_file';
-      final totalBytes = int.tryParse(request.headers['x-total-bytes'] ?? '0') ?? 0;
-      final fileId = request.headers['x-file-id'] ?? DateTime.now().millisecondsSinceEpoch.toString();
+      // 关键安全防御: 消除路径遍历 (Path Traversal) 风险
+      final fileName = p.basename(rawFileName);
 
-      // 安全拦截
+      final totalBytes = int.tryParse(request.headers['x-total-bytes'] ?? '0') ?? 0;
+      final fileId = request.headers['x-file-id'] ?? '';
+      final transferToken = request.headers['x-transfer-token'] ?? '';
+
+      // 安全拦截 1: 验证发起设备是否属于信任白名单
       if (!trustStoreService.isTrusted(senderId)) {
         return Response.forbidden('Unauthorized device');
       }
+
+      // 安全拦截 2: 严格核验本次传输的单次握手 Token (防 Header 伪造)
+      final expectedToken = _authorizedTransferSessions[fileId];
+      if (expectedToken == null || expectedToken != transferToken) {
+        return Response.forbidden('Invalid or expired transfer session token');
+      }
+      _authorizedTransferSessions.remove(fileId); // 校验通过即销毁
 
       final targetDir = Directory(_saveDirectory);
       if (!await targetDir.exists()) {
